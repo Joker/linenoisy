@@ -1,12 +1,11 @@
-# Linesqueak
+# Linenoisy
 
-[![Build Status](https://travis-ci.org/ichiban/linesqueak.svg?branch=master)](https://travis-ci.org/ichiban/linesqueak)
-
-Linesqueak is a simple pure-Go line editor.
+Linenoisy is a simple pure-Go line editor.
 It speaks to `io.Reader` and `io.Writer` instead of pty/tty,
-which makes it easy to integrate with network based applications (see [examples/ssh](https://github.com/ichiban/linesqueak/blob/master/examples/ssh/main.go)).
+which makes it easy to integrate with network based applications (see [examples/ssh](https://github.com/Joker/linenoisy/blob/master/examples/ssh/main.go)).
 
 It is inspired by [Linenoise](https://github.com/antirez/linenoise).
+Based on [Linesqueak](https://github.com/ichiban/linesqueak).
 
 # Features
 
@@ -18,7 +17,7 @@ It is inspired by [Linenoise](https://github.com/antirez/linenoise).
 # Basic Usage
 
 ```go
-e := &linesqueak.Editor{
+e := &linenoisy.Editor{
 	In:     bufio.NewReader(r), // `r` is `io.Reader` (e.g. `ssh.Channel`)
 	Out:    bufio.NewWriter(w), // `w` is `io.Writer` (e.g. `ssh.Channel`)
 	Prompt: "> ",               // you can be creative here :)

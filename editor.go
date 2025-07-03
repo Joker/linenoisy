@@ -1,5 +1,5 @@
-// Package linesqueak provides readline-like line editing functionality over io.Reader & io.Writer.
-package linesqueak
+// Package linenoisy provides readline-like line editing functionality over io.Reader & io.Writer.
+package linenoisy
 
 import (
 	"bufio"
@@ -11,58 +11,49 @@ import (
 	"strconv"
 )
 
+const (
+	ctrlA     = 1
+	ctrlB     = 2
+	ctrlC     = 3
+	ctrlD     = 4
+	ctrlE     = 5
+	ctrlF     = 6
+	ctrlH     = 8
+	tab       = 9
+	ctrlK     = 11
+	ctrlL     = 12
+	enter     = 13
+	ctrlN     = 14
+	ctrlP     = 16
+	ctrlT     = 20
+	ctrlU     = 21
+	ctrlW     = 23
+	esc       = 27
+	space     = 32
+	backspace = 127
+)
+
+var SupportedTerms = []string{"dumb", "cons25", "emacs"} // SupportedTerms is a list of supported terminals.
+
 // Editor interacts with VT100 like terminals via io.Reader & io.Writer and displays an input line.
 type Editor struct {
-	// In reads key strokes from the terminal.
-	// It's required to be raw mode i.e. send data as frequently as possible
-	// instead of cooked mode i.e. buffer it until it reaches a meaningful chunk (= line).
-	In *bufio.Reader
-
-	// Out displays current editor states to the terminal.
+	In  *bufio.Reader
 	Out *bufio.Writer
 
-	// Prompt is prepended to each editor state on the terminal.
-	// Prompt is not part of user inputs but part of UI. so it doesn't appear in result input lines.
 	Prompt string
 
-	// Buffer keeps the current user input.
-	Buffer []rune
+	Buffer  []rune // keeps the current user input.
+	Cur     int    // current cursor position in Buffer.
+	OldPos  int    // previous cursor position in Buffer.
+	Cols    int    // width   default 80.
+	Rows    int    // height  default 24.
+	MaxRows int    // height of editor status on the terminal.
 
-	// Pos points the current cursor position in Buffer.
-	Pos int
-
-	// Cols is the terminal width.
-	// If it's not provided, Editor assumes it's 80.
-	Cols int
-
-	// Rows is the terminal height.
-	// If it's not provided, Editor assumes it's 24.
-	Rows int
-
-	// History holds previous input lines so that user can reuse or tweak it later.
-	// It is your task to add lines to History, save History, or load it from disks.
 	History History
 
-	// Complete will be called when user wants you to complete their inputs.
-	// It takes the current user input and returns some completion suggestions.
-	// Complete is OPTIONAL. If no Complete is provided, completion will be disabled.
-	Complete func(s string) []string
-
-	// Hint will be called while user is typing and displayed on the right of the user input.
-	// Hint is OPTIONAL. If no Hint is provided, no hint will be shown.
-	Hint func(s string) *Hint
-
-	// Width calculates character width on the terminal.
-	// A lot of CJK characters and emojis are twice as wide as ASCII characters.
-	// Width is OPTIONAL. By default,
-	// it calculates the character width as 1 for all characters except tab which width is 4.
-	Width func(rune) int
-
-	// OldPos points the previous cursor position in Buffer.
-	OldPos int
-
-	// MaxRows is the height of editor status on the terminal.
-	MaxRows int
+	Complete  func(s string) []string // OPTIONAL; It takes the current user input and returns some completion suggestions.
+	Hint      func(s string) *Hint    // OPTIONAL; Hint will be called while user is typing and displayed on the right of the user input.
+	WidthChar func(rune) int          // OPTIONAL; Calculates character width on the terminal. (A lot of CJK characters and emojis are twice as wide as ASCII characters.)
 }
 
 // Line reads user key strokes and returns a confirmed input line while displaying editor states on the terminal.
@@ -229,6 +220,8 @@ line:
 	return string(e.Buffer), nil
 }
 
+//
+
 var curPosPattern = regexp.MustCompile("\x1b\\[(\\d+);(\\d+)R")
 
 // Adjust queries the terminal about rows and cols and updates Editor's Rows and Cols.
@@ -267,9 +260,11 @@ func (e *Editor) Adjust() error {
 	return nil
 }
 
+//
+
 func (e *Editor) Write(b []byte) (int, error) {
 	e.init()
-	ew := errWriter{w:e.Out}
+	ew := errWriter{w: e.Out}
 	ew.writeString("\r\x1b[0K")
 	ew.write(bytes.Replace(b, []byte("\n"), []byte("\r\n"), -1))
 	ew.flush()
@@ -283,7 +278,7 @@ func (e *Editor) editReset() error {
 	e.init()
 	e.Buffer = []rune{}
 	e.OldPos = 0
-	e.Pos = 0
+	e.Cur = 0
 	e.MaxRows = 0
 	return e.refreshLine()
 }
@@ -298,31 +293,24 @@ func (e *Editor) init() {
 }
 
 func (e *Editor) editBackspace() error {
-	if e.Pos == 0 {
+	if e.Cur == 0 {
 		return e.beep()
 	}
-
-	e.Pos--
-
-	// Delete https://github.com/golang/go/wiki/SliceTricks
-	e.Buffer = e.Buffer[:e.Pos+copy(e.Buffer[e.Pos:], e.Buffer[e.Pos+1:])]
-
+	e.Cur--
+	e.Buffer = e.Buffer[:e.Cur+copy(e.Buffer[e.Cur:], e.Buffer[e.Cur+1:])] // Delete https://github.com/golang/go/wiki/SliceTricks
 	return e.refreshLine()
 }
 
 func (e *Editor) editDelete() error {
-	if e.Pos == len(e.Buffer) {
+	if e.Cur == len(e.Buffer) {
 		return e.beep()
 	}
-
-	// Delete https://github.com/golang/go/wiki/SliceTricks
-	e.Buffer = e.Buffer[:e.Pos+copy(e.Buffer[e.Pos:], e.Buffer[e.Pos+1:])]
-
+	e.Buffer = e.Buffer[:e.Cur+copy(e.Buffer[e.Cur:], e.Buffer[e.Cur+1:])] // Delete https://github.com/golang/go/wiki/SliceTricks
 	return e.refreshLine()
 }
 
 func (e *Editor) editSwap() error {
-	p := e.Pos
+	p := e.Cur
 	if p == len(e.Buffer) {
 		p = len(e.Buffer) - 1
 	}
@@ -333,29 +321,29 @@ func (e *Editor) editSwap() error {
 
 	e.Buffer[p-1], e.Buffer[p] = e.Buffer[p], e.Buffer[p-1]
 
-	if e.Pos < len(e.Buffer) {
-		e.Pos++
+	if e.Cur < len(e.Buffer) {
+		e.Cur++
 	}
 
 	return e.refreshLine()
 }
 
 func (e *Editor) editMoveLeft() error {
-	if e.Pos == 0 {
+	if e.Cur == 0 {
 		return e.beep()
 	}
 
-	e.Pos--
+	e.Cur--
 
 	return e.refreshLine()
 }
 
 func (e *Editor) editMoveRight() error {
-	if e.Pos == len(e.Buffer) {
+	if e.Cur == len(e.Buffer) {
 		return e.beep()
 	}
 
-	e.Pos++
+	e.Cur++
 
 	return e.refreshLine()
 }
@@ -366,7 +354,7 @@ func (e *Editor) editHistoryPrev() error {
 		return e.beep()
 	}
 	e.Buffer = []rune(e.History.Get())
-	e.Pos = len(e.Buffer)
+	e.Cur = len(e.Buffer)
 	return e.refreshLine()
 }
 
@@ -375,37 +363,37 @@ func (e *Editor) editHistoryNext() error {
 		return e.beep()
 	}
 	e.Buffer = []rune(e.History.Get())
-	e.Pos = len(e.Buffer)
+	e.Cur = len(e.Buffer)
 	return e.refreshLine()
 }
 
 func (e *Editor) editKillForward() error {
-	e.Buffer = e.Buffer[:e.Pos]
+	e.Buffer = e.Buffer[:e.Cur]
 	return e.refreshLine()
 }
 
 func (e *Editor) editMoveHome() error {
-	if e.Pos == 0 {
+	if e.Cur == 0 {
 		return e.beep()
 	}
 
-	e.Pos = 0
+	e.Cur = 0
 	return e.refreshLine()
 }
 
 func (e *Editor) editMoveEnd() error {
-	if e.Pos == len(e.Buffer) {
+	if e.Cur == len(e.Buffer) {
 		return e.beep()
 	}
 
-	e.Pos = len(e.Buffer)
+	e.Cur = len(e.Buffer)
 	return e.refreshLine()
 }
 
 func (e *Editor) editDeletePrevWord() error {
 	var w bool
 	var p int
-	for i := e.Pos - 1; i >= 0; i-- {
+	for i := e.Cur - 1; i >= 0; i-- {
 		if e.Buffer[i] != space {
 			w = true // found a word to delete
 			continue
@@ -420,19 +408,11 @@ func (e *Editor) editDeletePrevWord() error {
 	}
 
 	e.Buffer = e.Buffer[:p]
-	e.Pos = p
+	e.Cur = p
 	return e.refreshLine()
 }
 
-func (e *Editor) editInsert(r rune) error {
-	// Insert https://github.com/golang/go/wiki/SliceTricks
-	e.Buffer = append(e.Buffer, 0)
-	copy(e.Buffer[e.Pos+1:], e.Buffer[e.Pos:])
-	e.Buffer[e.Pos] = r
-
-	e.Pos++
-	return e.refreshLine()
-}
+//
 
 func (e *Editor) completeLine() error {
 	if e.Complete == nil {
@@ -477,7 +457,7 @@ complete:
 			break complete
 		default:
 			e.Buffer = []rune(c)
-			e.Pos = len(e.Buffer)
+			e.Cur = len(e.Buffer)
 			break complete
 		}
 	}
@@ -485,49 +465,28 @@ complete:
 	return nil
 }
 
-const (
-	ctrlA     = 1
-	ctrlB     = 2
-	ctrlC     = 3
-	ctrlD     = 4
-	ctrlE     = 5
-	ctrlF     = 6
-	ctrlH     = 8
-	tab       = 9
-	ctrlK     = 11
-	ctrlL     = 12
-	enter     = 13
-	ctrlN     = 14
-	ctrlP     = 16
-	ctrlT     = 20
-	ctrlU     = 21
-	ctrlW     = 23
-	esc       = 27
-	space     = 32
-	backspace = 127
-)
+func (e *Editor) editInsert(r rune) error {
+	// Insert https://github.com/golang/go/wiki/SliceTricks
+	e.Buffer = append(e.Buffer, 0)
+	copy(e.Buffer[e.Cur+1:], e.Buffer[e.Cur:])
+	e.Buffer[e.Cur] = r
 
-// SupportedTerms is a list of supported terminals.
-var SupportedTerms = []string{"dumb", "cons25", "emacs"}
-
-func (e *Editor) clearScreen() error {
-	n, err := e.Out.WriteString("\x1b[H\x1b[2J")
-	if err != nil {
-		return err
-	}
-	if n != 7 {
-		return errors.New("failed to clear screen")
-	}
-	return nil
+	e.Cur++
+	return e.refreshLine()
 }
 
-func (e *Editor) beep() error {
-	if _, err := e.Out.WriteString("\a"); err != nil {
+//
+
+func (e *Editor) refreshLineString(s string) error {
+	b := e.Buffer
+	p := e.Cur
+	e.Buffer = []rune(s)
+	e.Cur = len(e.Buffer)
+	if err := e.refreshLine(); err != nil {
 		return err
 	}
-	if err := e.Out.Flush(); err != nil {
-		return err
-	}
+	e.Buffer = b
+	e.Cur = p
 	return nil
 }
 
@@ -535,8 +494,8 @@ func (e *Editor) refreshLine() error {
 	h := e.hint()
 
 	f := defaultWidth
-	if e.Width != nil {
-		f = e.Width
+	if e.WidthChar != nil {
+		f = e.WidthChar
 	}
 
 	var pw int
@@ -546,7 +505,7 @@ func (e *Editor) refreshLine() error {
 
 	var bw, cw, ocw int
 	for i, r := range e.Buffer {
-		if i < e.Pos {
+		if i < e.Cur {
 			cw += f(r)
 		}
 		if i < e.OldPos {
@@ -583,8 +542,8 @@ func (e *Editor) refreshLine() error {
 	}
 
 	// go to the bottom of editor region
-	if oldRows - ocp.rows > 0 {
-		ew.writeString(fmt.Sprintf("\x1b[%dB", oldRows - ocp.rows))
+	if oldRows-ocp.rows > 0 {
+		ew.writeString(fmt.Sprintf("\x1b[%dB", oldRows-ocp.rows))
 	}
 
 	for i := 1; i < oldRows; i++ {
@@ -600,7 +559,7 @@ func (e *Editor) refreshLine() error {
 
 	// If we are at the right edge,
 	// move cursor to the beginning of next line.
-	if e.Pos == len(e.Buffer) && cp.cols == 0 {
+	if e.Cur == len(e.Buffer) && cp.cols == 0 {
 		ew.writeString("\n\r")
 		cp.rows++
 		ep.rows++
@@ -610,8 +569,8 @@ func (e *Editor) refreshLine() error {
 	}
 
 	// Go up till we reach the expected position.
-	if ep.rows - cp.rows > 0 {
-		ew.writeString(fmt.Sprintf("\x1b[%dA", ep.rows - cp.rows))
+	if ep.rows-cp.rows > 0 {
+		ew.writeString(fmt.Sprintf("\x1b[%dA", ep.rows-cp.rows))
 	}
 
 	ew.writeString("\r")
@@ -621,21 +580,31 @@ func (e *Editor) refreshLine() error {
 
 	ew.flush()
 
-	e.OldPos = e.Pos
+	e.OldPos = e.Cur
 
 	return ew.err
 }
 
-func (e *Editor) refreshLineString(s string) error {
-	b := e.Buffer
-	p := e.Pos
-	e.Buffer = []rune(s)
-	e.Pos = len(e.Buffer)
-	if err := e.refreshLine(); err != nil {
+//
+
+func (e *Editor) clearScreen() error {
+	n, err := e.Out.WriteString("\x1b[H\x1b[2J")
+	if err != nil {
 		return err
 	}
-	e.Buffer = b
-	e.Pos = p
+	if n != 7 {
+		return errors.New("failed to clear screen")
+	}
+	return nil
+}
+
+func (e *Editor) beep() error {
+	if _, err := e.Out.WriteString("\a"); err != nil {
+		return err
+	}
+	if err := e.Out.Flush(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -646,6 +615,8 @@ func defaultWidth(r rune) int {
 
 	return 1
 }
+
+//
 
 // Hint displays helpful message with styles on the right of user input.
 type Hint struct {
@@ -738,7 +709,7 @@ func (h *History) Add(l string) {
 	}
 	h.Lines[len(h.Lines)-1] = l
 	h.Lines = append(h.Lines, "")
-	h.Pos = len(h.Lines)-1
+	h.Pos = len(h.Lines) - 1
 }
 
 func (h *History) Next() error {

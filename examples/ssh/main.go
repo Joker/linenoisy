@@ -4,14 +4,13 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"os/exec"
 
+	"github.com/Joker/linenoisy"
 	"golang.org/x/crypto/ssh"
-
-	"github.com/ichiban/linesqueak"
 )
 
 func main() {
@@ -70,7 +69,7 @@ func handleChannel(c ssh.NewChannel) {
 	}
 	defer conn.Close()
 
-	e := &linesqueak.Editor{
+	e := &linenoisy.Editor{
 		In:     bufio.NewReader(conn),
 		Out:    bufio.NewWriter(conn),
 		Prompt: "> ",
@@ -81,15 +80,15 @@ func handleChannel(c ssh.NewChannel) {
 				"Completion #3",
 			}
 		},
-		Hint: func(s string) *linesqueak.Hint {
+		Hint: func(s string) *linenoisy.Hint {
 			if s == "foo " {
-				return &linesqueak.Hint{
+				return &linenoisy.Hint{
 					Message: "bar baz",
 				}
 			}
 
 			if s == "foo bar " {
-				return &linesqueak.Hint{
+				return &linenoisy.Hint{
 					Message: "baz",
 					Bold:    true,
 				}
@@ -110,7 +109,7 @@ func handleChannel(c ssh.NewChannel) {
 				req.Reply(true, nil)
 			case "shell":
 				term := string(req.Payload)
-				for _, t := range linesqueak.SupportedTerms {
+				for _, t := range linenoisy.SupportedTerms {
 					if t == term {
 						req.Reply(true, nil)
 					}
@@ -161,7 +160,7 @@ func serverPrivateKey() (ssh.Signer, error) {
 }
 
 func serverPrivateKeyBytes() ([]byte, error) {
-	if key, err := ioutil.ReadFile("example.rsa"); err == nil {
+	if key, err := os.ReadFile("example.rsa"); err == nil {
 		return key, err
 	}
 
@@ -169,5 +168,5 @@ func serverPrivateKeyBytes() ([]byte, error) {
 		log.Fatalf("Failed to generate example.rsa: %s", err)
 	}
 
-	return ioutil.ReadFile("example.rsa")
+	return os.ReadFile("example.rsa")
 }

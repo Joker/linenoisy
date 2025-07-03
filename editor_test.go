@@ -1,4 +1,4 @@
-package linesqueak_test
+package linenoisy
 
 import (
 	"bufio"
@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"testing"
-
-	"github.com/ichiban/linesqueak"
 )
 
 func TestEditor_LineEnter(t *testing.T) {
@@ -25,7 +23,7 @@ func TestEditor_LineEnter(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -53,7 +51,7 @@ func TestEditor_LineCtrlC(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -85,7 +83,7 @@ func TestEditor_LineBackspace(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -117,7 +115,7 @@ func TestEditor_LineCtrlH(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -141,7 +139,7 @@ func TestEditor_LineCtrlD(t *testing.T) {
 			},
 		}
 
-		e := &linesqueak.Editor{
+		e := &Editor{
 			In:     bufio.NewReader(in),
 			Out:    bufio.NewWriter(out),
 			Prompt: "> ",
@@ -174,7 +172,7 @@ func TestEditor_LineCtrlD(t *testing.T) {
 			},
 		}
 
-		e := &linesqueak.Editor{
+		e := &Editor{
 			In:     bufio.NewReader(in),
 			Out:    bufio.NewWriter(out),
 			Prompt: "> ",
@@ -211,7 +209,7 @@ func TestEditor_LineCtrlT(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -257,7 +255,7 @@ func TestEditor_LineCtrlBCtrlF(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -292,7 +290,7 @@ func TestEditor_LineCtrlPCtrlN(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -333,7 +331,7 @@ func TestEditor_LineCtrlU(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -366,7 +364,7 @@ func TestEditor_LineCtrlK(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -398,7 +396,7 @@ func TestEditor_LineCtrlACtrlE(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -429,7 +427,7 @@ func TestEditor_LineCtrlL(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -463,7 +461,7 @@ func TestEditor_LineCtrlW(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -492,7 +490,7 @@ func TestEditor_LineEscSquareBracket3Tilda(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -527,7 +525,7 @@ func TestEditor_LineEscSquareBracketAEscSquareBracketB(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -583,7 +581,7 @@ func TestEditor_LineEscSquareBracketCEscSquareBracketD(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -615,7 +613,7 @@ func TestEditor_LineEscSquareBracketHEscSquareBracketF(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -647,7 +645,7 @@ func TestEditor_LineEscOHEscOF(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -674,7 +672,7 @@ func TestEditor_LineTabNoCompleteFunc(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -702,7 +700,7 @@ func TestEditor_LineTabNoCompletionAvailable(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -738,7 +736,7 @@ func TestEditor_LineTabSomeCompletions(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -777,13 +775,13 @@ func TestEditor_LineHint(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
-		Hint: func(s string) *linesqueak.Hint {
+		Hint: func(s string) *Hint {
 			if s == "foo " {
-				return &linesqueak.Hint{
+				return &Hint{
 					Message: "bar",
 				}
 			}
@@ -809,7 +807,7 @@ func TestEditor_Adjust(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
@@ -836,7 +834,7 @@ func TestEditor_Write(t *testing.T) {
 		},
 	}
 
-	e := &linesqueak.Editor{
+	e := &Editor{
 		In:     bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
