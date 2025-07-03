@@ -37,6 +37,7 @@ for {
 
 # Similar Projects
 
+- [Term](https://pkg.go.dev/golang.org/x/term)
 - [Readline](https://github.com/chzyer/readline)
 - [Liner](https://github.com/peterh/liner)
 

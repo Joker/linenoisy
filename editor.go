@@ -31,11 +31,15 @@ const (
 	esc       = 27
 	space     = 32
 	backspace = 127
+	question  = '?'
 )
 
-var SupportedTerms = []string{"dumb", "cons25", "emacs"} // SupportedTerms is a list of supported terminals.
+var (
+	SupportedTerms = []string{"dumb", "cons25", "emacs"} // SupportedTerms is a list of supported terminals.
+	curPosPattern  = regexp.MustCompile("\x1b\\[(\\d+);(\\d+)R")
+)
 
-// Editor interacts with VT100 like terminals via io.Reader & io.Writer and displays an input line.
+// Editor interacts with VT100.
 type Editor struct {
 	In  *bufio.Reader
 	Out *bufio.Writer
@@ -44,14 +48,15 @@ type Editor struct {
 
 	Buffer  []rune // keeps the current user input.
 	Cur     int    // current cursor position in Buffer.
-	OldPos  int    // previous cursor position in Buffer.
-	Cols    int    // width   default 80.
-	Rows    int    // height  default 24.
+	OldCur  int    // previous cursor position in Buffer.
+	Cols    int    // width  default 80.
+	Rows    int    // height default 24.
 	MaxRows int    // height of editor status on the terminal.
 
 	History History
 
 	Complete  func(s string) []string // OPTIONAL; It takes the current user input and returns some completion suggestions.
+	Help      func(s string)          // OPTIONAL; Print help.
 	Hint      func(s string) *Hint    // OPTIONAL; Hint will be called while user is typing and displayed on the right of the user input.
 	WidthChar func(rune) int          // OPTIONAL; Calculates character width on the terminal. (A lot of CJK characters and emojis are twice as wide as ASCII characters.)
 }
@@ -61,7 +66,7 @@ func (e *Editor) Line() (string, error) {
 	if err := e.editReset(); err != nil {
 		return string(e.Buffer), err
 	}
-line:
+
 	for {
 		r, _, err := e.In.ReadRune()
 		if err != nil {
@@ -70,159 +75,105 @@ line:
 
 		switch r {
 		case enter:
-			break line
+			return string(e.Buffer), nil
+		case tab:
+			err = e.completeLine()
+		case question:
+			err = e.printHelp()
+		case backspace, ctrlH:
+			err = e.editBackspace()
 		case ctrlC:
 			return string(e.Buffer), errors.New("try again")
-		case backspace, ctrlH:
-			if err := e.editBackspace(); err != nil {
-				return string(e.Buffer), err
-			}
 		case ctrlD:
 			if len(e.Buffer) == 0 {
 				return string(e.Buffer), io.EOF
 			}
+			err = e.editDelete()
+		case esc:
+			r1, _, err := e.In.ReadRune()
+			if err != nil {
+				return string(e.Buffer), err
+			}
 
-			if err := e.editDelete(); err != nil {
-				return string(e.Buffer), err
-			}
-		case ctrlT:
-			if err := e.editSwap(); err != nil {
-				return string(e.Buffer), err
-			}
-		case ctrlB:
-			if err := e.editMoveLeft(); err != nil {
-				return string(e.Buffer), err
-			}
-		case ctrlF:
-			if err := e.editMoveRight(); err != nil {
-				return string(e.Buffer), err
-			}
-		case ctrlP:
-			if err := e.editHistoryPrev(); err != nil {
-				return string(e.Buffer), err
-			}
-		case ctrlN:
-			if err := e.editHistoryNext(); err != nil {
-				return string(e.Buffer), err
-			}
-		case ctrlU:
-			if err := e.editReset(); err != nil {
-				return string(e.Buffer), err
-			}
-		case ctrlK:
-			if err := e.editKillForward(); err != nil {
-				return string(e.Buffer), err
-			}
-		case ctrlA:
-			if err := e.editMoveHome(); err != nil {
-				return string(e.Buffer), err
-			}
-		case ctrlE:
-			if err := e.editMoveEnd(); err != nil {
-				return string(e.Buffer), err
+			switch r1 {
+			case '[':
+				r2, _, err := e.In.ReadRune()
+				if err != nil {
+					return string(e.Buffer), err
+				}
+
+				switch r2 {
+				case '0', '1', '2', '4', '5', '6', '7', '8', '9':
+					_, _, err = e.In.ReadRune()
+				case '3':
+					r4, _, err := e.In.ReadRune()
+					if err != nil {
+						return string(e.Buffer), err
+					}
+
+					if r4 == '~' {
+						err = e.editDelete()
+					}
+				case 'A':
+					err = e.editHistoryPrev()
+				case 'B':
+					err = e.editHistoryNext()
+				case 'C':
+					err = e.editMoveRight()
+				case 'D':
+					err = e.editMoveLeft()
+				case 'H':
+					err = e.editMoveHome()
+				case 'F':
+					err = e.editMoveEnd()
+				}
+			case 'O':
+				r3, _, err := e.In.ReadRune()
+				if err != nil {
+					return string(e.Buffer), err
+				}
+
+				switch r3 {
+				case 'H':
+					err = e.editMoveHome()
+				case 'F':
+					err = e.editMoveEnd()
+				}
 			}
 		case ctrlL:
 			if err := e.clearScreen(); err != nil {
 				return string(e.Buffer), err
 			}
-
-			if err := e.refreshLine(); err != nil {
-				return string(e.Buffer), err
-			}
+			err = e.refreshLine()
 		case ctrlW:
-			if err := e.editDeletePrevWord(); err != nil {
-				return string(e.Buffer), err
-			}
-		case esc:
-			r, _, err := e.In.ReadRune()
-			if err != nil {
-				return string(e.Buffer), err
-			}
-
-			switch r {
-			case '[':
-				r, _, err := e.In.ReadRune()
-				if err != nil {
-					return string(e.Buffer), err
-				}
-
-				switch r {
-				case '0', '1', '2', '4', '5', '6', '7', '8', '9':
-					_, _, err := e.In.ReadRune()
-					if err != nil {
-						return string(e.Buffer), err
-					}
-				case '3':
-					r, _, err := e.In.ReadRune()
-					if err != nil {
-						return string(e.Buffer), err
-					}
-
-					switch r {
-					case '~':
-						if err := e.editDelete(); err != nil {
-							return string(e.Buffer), err
-						}
-					}
-				case 'A':
-					if err := e.editHistoryPrev(); err != nil {
-						return string(e.Buffer), err
-					}
-				case 'B':
-					if err := e.editHistoryNext(); err != nil {
-						return string(e.Buffer), err
-					}
-				case 'C':
-					if err := e.editMoveRight(); err != nil {
-						return string(e.Buffer), err
-					}
-				case 'D':
-					if err := e.editMoveLeft(); err != nil {
-						return string(e.Buffer), err
-					}
-				case 'H':
-					if err := e.editMoveHome(); err != nil {
-						return string(e.Buffer), err
-					}
-				case 'F':
-					if err := e.editMoveEnd(); err != nil {
-						return string(e.Buffer), err
-					}
-				}
-			case 'O':
-				r, _, err := e.In.ReadRune()
-				if err != nil {
-					return string(e.Buffer), err
-				}
-
-				switch r {
-				case 'H':
-					if err := e.editMoveHome(); err != nil {
-						return string(e.Buffer), err
-					}
-				case 'F':
-					if err := e.editMoveEnd(); err != nil {
-						return string(e.Buffer), err
-					}
-				}
-			}
-		case tab:
-			if err := e.completeLine(); err != nil {
-				return string(e.Buffer), err
-			}
+			err = e.editDeletePrevWord()
+		case ctrlB:
+			err = e.editMoveLeft()
+		case ctrlF:
+			err = e.editMoveRight()
+		case ctrlP:
+			err = e.editHistoryPrev()
+		case ctrlN:
+			err = e.editHistoryNext()
+		case ctrlU:
+			err = e.editReset()
+		case ctrlK:
+			err = e.editKillForward()
+		case ctrlA:
+			err = e.editMoveHome()
+		case ctrlE:
+			err = e.editMoveEnd()
+		case ctrlT:
+			err = e.editSwap()
 		default:
-			if err := e.editInsert(r); err != nil {
-				return string(e.Buffer), err
-			}
+			err = e.editInsert(r)
+		}
+
+		if err != nil {
+			return string(e.Buffer), err
 		}
 	}
-
-	return string(e.Buffer), nil
 }
-
-//
-
-var curPosPattern = regexp.MustCompile("\x1b\\[(\\d+);(\\d+)R")
 
 // Adjust queries the terminal about rows and cols and updates Editor's Rows and Cols.
 func (e *Editor) Adjust() error {
@@ -260,13 +211,11 @@ func (e *Editor) Adjust() error {
 	return nil
 }
 
-//
-
 func (e *Editor) Write(b []byte) (int, error) {
 	e.init()
 	ew := errWriter{w: e.Out}
 	ew.writeString("\r\x1b[0K")
-	ew.write(bytes.Replace(b, []byte("\n"), []byte("\r\n"), -1))
+	ew.write(bytes.ReplaceAll(b, []byte("\n"), []byte("\r\n")))
 	ew.flush()
 	if ew.err != nil {
 		return 0, ew.err
@@ -274,10 +223,12 @@ func (e *Editor) Write(b []byte) (int, error) {
 	return len(b), e.refreshLine()
 }
 
+//
+
 func (e *Editor) editReset() error {
 	e.init()
 	e.Buffer = []rune{}
-	e.OldPos = 0
+	e.OldCur = 0
 	e.Cur = 0
 	e.MaxRows = 0
 	return e.refreshLine()
@@ -412,6 +363,16 @@ func (e *Editor) editDeletePrevWord() error {
 	return e.refreshLine()
 }
 
+func (e *Editor) editInsert(r rune) error {
+	// Insert https://github.com/golang/go/wiki/SliceTricks
+	e.Buffer = append(e.Buffer, 0)
+	copy(e.Buffer[e.Cur+1:], e.Buffer[e.Cur:])
+	e.Buffer[e.Cur] = r
+
+	e.Cur++
+	return e.refreshLine()
+}
+
 //
 
 func (e *Editor) completeLine() error {
@@ -420,15 +381,12 @@ func (e *Editor) completeLine() error {
 	}
 
 	opts := e.Complete(string(e.Buffer))
-
 	if len(opts) == 0 {
 		return e.beep()
 	}
 	opts = append(opts, string(e.Buffer))
 
 	pos := 0
-
-complete:
 	for {
 		c := opts[pos]
 
@@ -454,24 +412,18 @@ complete:
 			if err := e.refreshLine(); err != nil {
 				return err
 			}
-			break complete
+			return nil
 		default:
 			e.Buffer = []rune(c)
 			e.Cur = len(e.Buffer)
-			break complete
+			return nil
 		}
 	}
-
-	return nil
 }
 
-func (e *Editor) editInsert(r rune) error {
-	// Insert https://github.com/golang/go/wiki/SliceTricks
-	e.Buffer = append(e.Buffer, 0)
-	copy(e.Buffer[e.Cur+1:], e.Buffer[e.Cur:])
-	e.Buffer[e.Cur] = r
-
-	e.Cur++
+func (e *Editor) printHelp() error {
+	fmt.Fprintf(e.Out, "\n\r%s\n", "help")
+	e.Out.Flush()
 	return e.refreshLine()
 }
 
@@ -491,6 +443,10 @@ func (e *Editor) refreshLineString(s string) error {
 }
 
 func (e *Editor) refreshLine() error {
+	type pos struct {
+		cols, rows int
+	}
+
 	h := e.hint()
 
 	f := defaultWidth
@@ -508,7 +464,7 @@ func (e *Editor) refreshLine() error {
 		if i < e.Cur {
 			cw += f(r)
 		}
-		if i < e.OldPos {
+		if i < e.OldCur {
 			ocw += f(r)
 		}
 		bw += f(r)
@@ -520,7 +476,7 @@ func (e *Editor) refreshLine() error {
 	}
 
 	ep := pos{
-		cols: (pw + bw + hw) % e.Cols,
+		// cols: (pw + bw + hw) % e.Cols,
 		rows: (pw + bw + hw) / e.Cols,
 	}
 
@@ -530,7 +486,7 @@ func (e *Editor) refreshLine() error {
 	}
 
 	ocp := pos{
-		cols: (pw + ocw) % e.Cols,
+		// cols: (pw + ocw) % e.Cols,
 		rows: (pw + ocw) / e.Cols,
 	}
 
@@ -580,9 +536,15 @@ func (e *Editor) refreshLine() error {
 
 	ew.flush()
 
-	e.OldPos = e.Cur
+	e.OldCur = e.Cur
 
 	return ew.err
+}
+func defaultWidth(r rune) int {
+	if r == tab {
+		return 4
+	}
+	return 1
 }
 
 //
@@ -608,26 +570,13 @@ func (e *Editor) beep() error {
 	return nil
 }
 
-func defaultWidth(r rune) int {
-	if r == tab {
-		return 4
-	}
-
-	return 1
-}
-
 //
 
 // Hint displays helpful message with styles on the right of user input.
 type Hint struct {
-	// Message is the message to be displayed.
-	Message string
-
-	// Color is the text color of the hint.
-	Color Color
-
-	// Bold increases intensity if true.
-	Bold bool
+	Message string // message to be displayed.
+	Color   Color  // text color of the hint.
+	Bold    bool   // increases intensity if true.
 }
 
 func (e *Editor) hint() string {
@@ -636,7 +585,6 @@ func (e *Editor) hint() string {
 	}
 
 	h := e.Hint(string(e.Buffer))
-
 	if h == nil {
 		return ""
 	}
@@ -667,7 +615,8 @@ const (
 	White
 )
 
-// https://blog.golang.org/errors-are-values
+//
+
 type errWriter struct {
 	w   *bufio.Writer
 	err error
@@ -694,9 +643,7 @@ func (ew *errWriter) flush() {
 	ew.err = ew.w.Flush()
 }
 
-type pos struct {
-	cols, rows int
-}
+//
 
 type History struct {
 	Lines []string
