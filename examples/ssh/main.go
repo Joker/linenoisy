@@ -69,8 +69,8 @@ func handleChannel(c ssh.NewChannel) {
 	}
 	defer conn.Close()
 
-	e := &linenoisy.Editor{
-		In:     bufio.NewReader(conn),
+	e := &linenoisy.Terminal{
+		Inp:    bufio.NewReader(conn),
 		Out:    bufio.NewWriter(conn),
 		Prompt: "> ",
 		Complete: func(_ string) []string {
@@ -127,7 +127,7 @@ func handleChannel(c ssh.NewChannel) {
 	}()
 
 	for {
-		line, err := e.Line()
+		line, err := e.LineEditor()
 		if err != nil {
 			break
 		}

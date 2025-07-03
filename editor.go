@@ -9,6 +9,7 @@ import (
 	"io"
 	"regexp"
 	"strconv"
+	"text/tabwriter"
 )
 
 const (
@@ -39,10 +40,11 @@ var (
 	curPosPattern  = regexp.MustCompile("\x1b\\[(\\d+);(\\d+)R")
 )
 
-// Editor interacts with VT100.
-type Editor struct {
-	In  *bufio.Reader
+// Terminal interacts with VT100.
+type Terminal struct {
+	Inp *bufio.Reader
 	Out *bufio.Writer
+	Raw io.ReadWriteCloser
 
 	Prompt string
 
@@ -55,20 +57,36 @@ type Editor struct {
 
 	History History
 
-	Complete  func(s string) []string // OPTIONAL; It takes the current user input and returns some completion suggestions.
-	Help      func(s string)          // OPTIONAL; Print help.
-	Hint      func(s string) *Hint    // OPTIONAL; Hint will be called while user is typing and displayed on the right of the user input.
-	WidthChar func(rune) int          // OPTIONAL; Calculates character width on the terminal. (A lot of CJK characters and emojis are twice as wide as ASCII characters.)
+	Complete  func(line string) []string // OPTIONAL; It takes the current user input and returns some completion suggestions.
+	Help      func(line string) []Dict   // OPTIONAL; Print help.
+	Hint      func(line string) *Hint    // OPTIONAL; Hint will be called while user is typing and displayed on the right of the user input.
+	WidthChar func(rune) int             // OPTIONAL; Calculates character width on the terminal. (A lot of CJK characters and emojis are twice as wide as ASCII characters.)
 }
 
-// Line reads user key strokes and returns a confirmed input line while displaying editor states on the terminal.
-func (e *Editor) Line() (string, error) {
+type Dict struct {
+	K string
+	V string
+}
+
+func NewTerminal(channel io.ReadWriteCloser, prompt string) *Terminal {
+	return &Terminal{
+		Inp:    bufio.NewReader(channel),
+		Out:    bufio.NewWriter(channel),
+		Raw:    channel,
+		Prompt: prompt,
+		Cols:   80,
+		Rows:   24,
+	}
+}
+
+// LineEditor reads user key strokes and returns a confirmed input line while displaying editor states on the terminal.
+func (e *Terminal) LineEditor() (string, error) {
 	if err := e.editReset(); err != nil {
 		return string(e.Buffer), err
 	}
 
 	for {
-		r, _, err := e.In.ReadRune()
+		r, _, err := e.Inp.ReadRune()
 		if err != nil {
 			return string(e.Buffer), err
 		}
@@ -90,23 +108,23 @@ func (e *Editor) Line() (string, error) {
 			}
 			err = e.editDelete()
 		case esc:
-			r1, _, err := e.In.ReadRune()
+			r1, _, err := e.Inp.ReadRune()
 			if err != nil {
 				return string(e.Buffer), err
 			}
 
 			switch r1 {
 			case '[':
-				r2, _, err := e.In.ReadRune()
+				r2, _, err := e.Inp.ReadRune()
 				if err != nil {
 					return string(e.Buffer), err
 				}
 
 				switch r2 {
 				case '0', '1', '2', '4', '5', '6', '7', '8', '9':
-					_, _, err = e.In.ReadRune()
+					_, _, err = e.Inp.ReadRune()
 				case '3':
-					r4, _, err := e.In.ReadRune()
+					r4, _, err := e.Inp.ReadRune()
 					if err != nil {
 						return string(e.Buffer), err
 					}
@@ -128,7 +146,7 @@ func (e *Editor) Line() (string, error) {
 					err = e.editMoveEnd()
 				}
 			case 'O':
-				r3, _, err := e.In.ReadRune()
+				r3, _, err := e.Inp.ReadRune()
 				if err != nil {
 					return string(e.Buffer), err
 				}
@@ -176,7 +194,7 @@ func (e *Editor) Line() (string, error) {
 }
 
 // Adjust queries the terminal about rows and cols and updates Editor's Rows and Cols.
-func (e *Editor) Adjust() error {
+func (e *Terminal) Adjust() error {
 	// https://groups.google.com/forum/#!topic/comp.os.vms/bDKSY6nG13k
 	if _, err := e.Out.WriteString("\x1b7\x1b[999;999H\x1b[6n"); err != nil {
 		return err
@@ -186,7 +204,7 @@ func (e *Editor) Adjust() error {
 		return err
 	}
 
-	res, err := e.In.ReadString('R')
+	res, err := e.Inp.ReadString('R')
 	if err != nil {
 		return err
 	}
@@ -211,8 +229,8 @@ func (e *Editor) Adjust() error {
 	return nil
 }
 
-func (e *Editor) Write(b []byte) (int, error) {
-	e.init()
+func (e *Terminal) Write(b []byte) (int, error) {
+	e.notZero()
 	ew := errWriter{w: e.Out}
 	ew.writeString("\r\x1b[0K")
 	ew.write(bytes.ReplaceAll(b, []byte("\n"), []byte("\r\n")))
@@ -225,8 +243,8 @@ func (e *Editor) Write(b []byte) (int, error) {
 
 //
 
-func (e *Editor) editReset() error {
-	e.init()
+func (e *Terminal) editReset() error {
+	e.notZero()
 	e.Buffer = []rune{}
 	e.OldCur = 0
 	e.Cur = 0
@@ -234,7 +252,7 @@ func (e *Editor) editReset() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) init() {
+func (e *Terminal) notZero() {
 	if e.Rows == 0 {
 		e.Rows = 24
 	}
@@ -243,7 +261,7 @@ func (e *Editor) init() {
 	}
 }
 
-func (e *Editor) editBackspace() error {
+func (e *Terminal) editBackspace() error {
 	if e.Cur == 0 {
 		return e.beep()
 	}
@@ -252,7 +270,7 @@ func (e *Editor) editBackspace() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) editDelete() error {
+func (e *Terminal) editDelete() error {
 	if e.Cur == len(e.Buffer) {
 		return e.beep()
 	}
@@ -260,7 +278,7 @@ func (e *Editor) editDelete() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) editSwap() error {
+func (e *Terminal) editSwap() error {
 	p := e.Cur
 	if p == len(e.Buffer) {
 		p = len(e.Buffer) - 1
@@ -279,7 +297,7 @@ func (e *Editor) editSwap() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) editMoveLeft() error {
+func (e *Terminal) editMoveLeft() error {
 	if e.Cur == 0 {
 		return e.beep()
 	}
@@ -289,7 +307,7 @@ func (e *Editor) editMoveLeft() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) editMoveRight() error {
+func (e *Terminal) editMoveRight() error {
 	if e.Cur == len(e.Buffer) {
 		return e.beep()
 	}
@@ -299,7 +317,7 @@ func (e *Editor) editMoveRight() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) editHistoryPrev() error {
+func (e *Terminal) editHistoryPrev() error {
 	e.History.Save(string(e.Buffer))
 	if err := e.History.Prev(); err != nil {
 		return e.beep()
@@ -309,7 +327,7 @@ func (e *Editor) editHistoryPrev() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) editHistoryNext() error {
+func (e *Terminal) editHistoryNext() error {
 	if err := e.History.Next(); err != nil {
 		return e.beep()
 	}
@@ -318,12 +336,12 @@ func (e *Editor) editHistoryNext() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) editKillForward() error {
+func (e *Terminal) editKillForward() error {
 	e.Buffer = e.Buffer[:e.Cur]
 	return e.refreshLine()
 }
 
-func (e *Editor) editMoveHome() error {
+func (e *Terminal) editMoveHome() error {
 	if e.Cur == 0 {
 		return e.beep()
 	}
@@ -332,7 +350,7 @@ func (e *Editor) editMoveHome() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) editMoveEnd() error {
+func (e *Terminal) editMoveEnd() error {
 	if e.Cur == len(e.Buffer) {
 		return e.beep()
 	}
@@ -341,7 +359,7 @@ func (e *Editor) editMoveEnd() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) editDeletePrevWord() error {
+func (e *Terminal) editDeletePrevWord() error {
 	var w bool
 	var p int
 	for i := e.Cur - 1; i >= 0; i-- {
@@ -363,7 +381,7 @@ func (e *Editor) editDeletePrevWord() error {
 	return e.refreshLine()
 }
 
-func (e *Editor) editInsert(r rune) error {
+func (e *Terminal) editInsert(r rune) error {
 	// Insert https://github.com/golang/go/wiki/SliceTricks
 	e.Buffer = append(e.Buffer, 0)
 	copy(e.Buffer[e.Cur+1:], e.Buffer[e.Cur:])
@@ -375,7 +393,7 @@ func (e *Editor) editInsert(r rune) error {
 
 //
 
-func (e *Editor) completeLine() error {
+func (e *Terminal) completeLine() error {
 	if e.Complete == nil {
 		return e.editInsert(tab)
 	}
@@ -394,19 +412,19 @@ func (e *Editor) completeLine() error {
 			return err
 		}
 
-		b, err := e.In.Peek(1)
+		b, err := e.Inp.Peek(1)
 		if err != nil {
 			return err
 		}
 
 		switch b[0] {
 		case tab:
-			if _, _, err := e.In.ReadRune(); err != nil {
+			if _, _, err := e.Inp.ReadRune(); err != nil {
 				return err
 			}
 			pos = (pos + len(opts) + 1) % len(opts)
 		case esc:
-			if _, _, err := e.In.ReadRune(); err != nil {
+			if _, _, err := e.Inp.ReadRune(); err != nil {
 				return err
 			}
 			if err := e.refreshLine(); err != nil {
@@ -421,15 +439,27 @@ func (e *Editor) completeLine() error {
 	}
 }
 
-func (e *Editor) printHelp() error {
-	fmt.Fprintf(e.Out, "\n\r%s\n", "help")
-	e.Out.Flush()
+func (e *Terminal) printHelp() error {
+	if e.Help == nil {
+		return e.editInsert('?')
+	}
+
+	var (
+		dict = e.Help(string(e.Buffer))
+		tw   = new(tabwriter.Writer)
+	)
+	tw.Init(e.Out, 0, 0, 3, ' ', 0)
+	for _, v := range dict {
+		fmt.Fprintf(tw, "\n\r%s\t%s\t", v.K, v.V)
+	}
+	tw.Flush() // e.Out.Flush()
+
 	return e.refreshLine()
 }
 
 //
 
-func (e *Editor) refreshLineString(s string) error {
+func (e *Terminal) refreshLineString(s string) error {
 	b := e.Buffer
 	p := e.Cur
 	e.Buffer = []rune(s)
@@ -442,37 +472,39 @@ func (e *Editor) refreshLineString(s string) error {
 	return nil
 }
 
-func (e *Editor) refreshLine() error {
+func (e *Terminal) refreshLine() error {
 	type pos struct {
 		cols, rows int
 	}
 
-	h := e.hint()
+	hintStr := e.hint()
 
-	f := defaultWidth
-	if e.WidthChar != nil {
-		f = e.WidthChar
+	if e.WidthChar == nil {
+		e.WidthChar = defaultWidth
 	}
 
-	var pw int
-	for _, r := range e.Prompt {
-		pw += f(r)
-	}
+	//
+
+	// var pw int
+	// for _, r := range e.Prompt {
+	// 	pw += e.WidthChar(r)
+	// }
+	pw := visualWidth([]rune(e.Prompt))
 
 	var bw, cw, ocw int
 	for i, r := range e.Buffer {
 		if i < e.Cur {
-			cw += f(r)
+			cw += e.WidthChar(r)
 		}
 		if i < e.OldCur {
-			ocw += f(r)
+			ocw += e.WidthChar(r)
 		}
-		bw += f(r)
+		bw += e.WidthChar(r)
 	}
 
 	var hw int
-	for _, r := range h {
-		hw += f(r)
+	for _, r := range hintStr {
+		hw += e.WidthChar(r)
 	}
 
 	ep := pos{
@@ -510,7 +542,7 @@ func (e *Editor) refreshLine() error {
 	ew.writeString("\r")
 	ew.writeString(e.Prompt)
 	ew.writeString(string(e.Buffer))
-	ew.writeString(h)
+	ew.writeString(hintStr)
 	ew.writeString("\x1b[0K")
 
 	// If we are at the right edge,
@@ -546,10 +578,26 @@ func defaultWidth(r rune) int {
 	}
 	return 1
 }
+func visualWidth(runes []rune) (length int) {
+	inEscSeq := false
+	for _, r := range runes {
+		switch {
+		case inEscSeq:
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscSeq = false
+			}
+		case r == '\x1b':
+			inEscSeq = true
+		default:
+			length++
+		}
+	}
+	return
+}
 
 //
 
-func (e *Editor) clearScreen() error {
+func (e *Terminal) clearScreen() error {
 	n, err := e.Out.WriteString("\x1b[H\x1b[2J")
 	if err != nil {
 		return err
@@ -560,7 +608,7 @@ func (e *Editor) clearScreen() error {
 	return nil
 }
 
-func (e *Editor) beep() error {
+func (e *Terminal) beep() error {
 	if _, err := e.Out.WriteString("\a"); err != nil {
 		return err
 	}
@@ -579,7 +627,7 @@ type Hint struct {
 	Bold    bool   // increases intensity if true.
 }
 
-func (e *Editor) hint() string {
+func (e *Terminal) hint() string {
 	if e.Hint == nil {
 		return ""
 	}

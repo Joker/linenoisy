@@ -23,13 +23,13 @@ func TestEditor_LineEnter(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -51,13 +51,13 @@ func TestEditor_LineCtrlC(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err == nil {
 		t.Error("err expected")
 	}
@@ -83,13 +83,13 @@ func TestEditor_LineBackspace(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -115,13 +115,13 @@ func TestEditor_LineCtrlH(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -139,13 +139,13 @@ func TestEditor_LineCtrlD(t *testing.T) {
 			},
 		}
 
-		e := &Editor{
-			In:     bufio.NewReader(in),
+		e := &Terminal{
+			Inp:    bufio.NewReader(in),
 			Out:    bufio.NewWriter(out),
 			Prompt: "> ",
 		}
 
-		l, err := e.Line()
+		l, err := e.LineEditor()
 		if err != io.EOF {
 			t.Error(err)
 		}
@@ -172,13 +172,13 @@ func TestEditor_LineCtrlD(t *testing.T) {
 			},
 		}
 
-		e := &Editor{
-			In:     bufio.NewReader(in),
+		e := &Terminal{
+			Inp:    bufio.NewReader(in),
 			Out:    bufio.NewWriter(out),
 			Prompt: "> ",
 		}
 
-		l, err := e.Line()
+		l, err := e.LineEditor()
 		if err != nil {
 			t.Error(err)
 		}
@@ -209,13 +209,13 @@ func TestEditor_LineCtrlT(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -255,13 +255,13 @@ func TestEditor_LineCtrlBCtrlF(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -290,13 +290,13 @@ func TestEditor_LineCtrlPCtrlN(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -306,7 +306,7 @@ func TestEditor_LineCtrlPCtrlN(t *testing.T) {
 
 	e.History.Add("foo")
 
-	l, err = e.Line()
+	l, err = e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -331,13 +331,13 @@ func TestEditor_LineCtrlU(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -364,13 +364,13 @@ func TestEditor_LineCtrlK(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -396,13 +396,13 @@ func TestEditor_LineCtrlACtrlE(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -427,13 +427,13 @@ func TestEditor_LineCtrlL(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -461,13 +461,13 @@ func TestEditor_LineCtrlW(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -490,13 +490,13 @@ func TestEditor_LineEscSquareBracket3Tilda(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -525,13 +525,13 @@ func TestEditor_LineEscSquareBracketAEscSquareBracketB(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -541,7 +541,7 @@ func TestEditor_LineEscSquareBracketAEscSquareBracketB(t *testing.T) {
 
 	e.History.Add("foo")
 
-	l, err = e.Line()
+	l, err = e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -581,13 +581,13 @@ func TestEditor_LineEscSquareBracketCEscSquareBracketD(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -613,13 +613,13 @@ func TestEditor_LineEscSquareBracketHEscSquareBracketF(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -645,13 +645,13 @@ func TestEditor_LineEscOHEscOF(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -672,13 +672,13 @@ func TestEditor_LineTabNoCompleteFunc(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -700,8 +700,8 @@ func TestEditor_LineTabNoCompletionAvailable(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 		Complete: func(s string) []string {
@@ -712,7 +712,7 @@ func TestEditor_LineTabNoCompletionAvailable(t *testing.T) {
 		},
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -736,8 +736,8 @@ func TestEditor_LineTabSomeCompletions(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 		Complete: func(s string) []string {
@@ -751,7 +751,7 @@ func TestEditor_LineTabSomeCompletions(t *testing.T) {
 		},
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -775,8 +775,8 @@ func TestEditor_LineHint(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 		Hint: func(s string) *Hint {
@@ -790,7 +790,7 @@ func TestEditor_LineHint(t *testing.T) {
 		},
 	}
 
-	l, err := e.Line()
+	l, err := e.LineEditor()
 	if err != nil {
 		t.Error(err)
 	}
@@ -807,8 +807,8 @@ func TestEditor_Adjust(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 	}
@@ -834,8 +834,8 @@ func TestEditor_Write(t *testing.T) {
 		},
 	}
 
-	e := &Editor{
-		In:     bufio.NewReader(in),
+	e := &Terminal{
+		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
 		Buffer: []rune("foo bar"),
