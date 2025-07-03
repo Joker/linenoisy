@@ -9,6 +9,7 @@ import (
 	"io"
 	"regexp"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 )
 
@@ -57,15 +58,10 @@ type Terminal struct {
 
 	History History
 
-	Complete  func(line string) []string // OPTIONAL; It takes the current user input and returns some completion suggestions.
-	Help      func(line string) []Dict   // OPTIONAL; Print help.
-	Hint      func(line string) *Hint    // OPTIONAL; Hint will be called while user is typing and displayed on the right of the user input.
-	WidthChar func(rune) int             // OPTIONAL; Calculates character width on the terminal. (A lot of CJK characters and emojis are twice as wide as ASCII characters.)
-}
-
-type Dict struct {
-	K string
-	V string
+	Complete  func(line string) []string    // OPTIONAL; It takes the current user input and returns some completion suggestions.
+	Help      func(line string) [][2]string // OPTIONAL; Print help.
+	Hint      func(line string) *Hint       // OPTIONAL; Hint will be called while user is typing and displayed on the right of the user input.
+	WidthChar func(rune) int                // OPTIONAL; Calculates character width on the terminal. (A lot of CJK characters and emojis are twice as wide as ASCII characters.)
 }
 
 func NewTerminal(channel io.ReadWriteCloser, prompt string) *Terminal {
@@ -229,7 +225,7 @@ func (e *Terminal) Adjust() error {
 	return nil
 }
 
-func (e *Terminal) Write(b []byte) (int, error) {
+func (e *Terminal) WriteOut(b []byte) (int, error) {
 	e.notZero()
 	ew := errWriter{w: e.Out}
 	ew.writeString("\r\x1b[0K")
@@ -239,6 +235,34 @@ func (e *Terminal) Write(b []byte) (int, error) {
 		return 0, ew.err
 	}
 	return len(b), e.refreshLine()
+}
+
+func (e *Terminal) Write(buf []byte) (written int, err error) {
+	for len(buf) > 0 {
+		todo := len(buf)
+
+		i := bytes.IndexByte(buf, '\n')
+		if i >= 0 {
+			todo = i
+		}
+
+		nn, err := e.Raw.Write(buf[:todo])
+		written += nn
+		if err != nil {
+			return written, err
+		}
+
+		buf = buf[todo:]
+
+		if i >= 0 {
+			if _, err = e.Raw.Write([]byte{'\r', '\n'}); err != nil {
+				return written, err
+			}
+			written++
+			buf = buf[1:]
+		}
+	}
+	return written, nil
 }
 
 //
@@ -398,45 +422,73 @@ func (e *Terminal) completeLine() error {
 		return e.editInsert(tab)
 	}
 
-	opts := e.Complete(string(e.Buffer))
-	if len(opts) == 0 {
+	var (
+		opts     = e.Complete(string(e.Buffer))
+		opts_len = len(opts)
+	)
+	switch opts_len {
+	case 0:
 		return e.beep()
+	case 1:
+		e.Buffer = []rune(opts[0])
+		e.Cur = len(e.Buffer)
+		return e.refreshLine()
 	}
-	opts = append(opts, string(e.Buffer))
+	// fmt.Fprintf(e.Out, "\n\r    %s\n", strings.Join(opts, "   ")); e.Out.Flush()
 
-	pos := 0
-	for {
-		c := opts[pos]
-
-		if err := e.refreshLineString(c); err != nil {
-			return err
-		}
-
-		b, err := e.Inp.Peek(1)
-		if err != nil {
-			return err
-		}
-
-		switch b[0] {
-		case tab:
-			if _, _, err := e.Inp.ReadRune(); err != nil {
-				return err
-			}
-			pos = (pos + len(opts) + 1) % len(opts)
-		case esc:
-			if _, _, err := e.Inp.ReadRune(); err != nil {
-				return err
-			}
-			if err := e.refreshLine(); err != nil {
-				return err
-			}
-			return nil
-		default:
-			e.Buffer = []rune(c)
-			e.Cur = len(e.Buffer)
-			return nil
-		}
+	const size = 3
+	var (
+		tabl [][]string
+		tw   = new(tabwriter.Writer)
+	)
+	for i := 0; i < opts_len; i += size {
+		tabl = append(tabl, opts[i:min(i+size, opts_len)])
 	}
+
+	tw.Init(e.Out, 0, 0, 4, ' ', 0)
+	for _, v := range tabl {
+		fmt.Fprintf(tw, "\n\r    %s\t", strings.Join(v, "\t"))
+	}
+	fmt.Fprintln(tw)
+	tw.Flush() // e.Out.Flush()
+
+	e.refreshLine()
+	return nil
+	/*
+		pos := 0
+		for {
+			c := opts[pos]
+
+			if err := e.refreshLineByString(c); err != nil {
+				return err
+			}
+
+			b, err := e.Inp.Peek(1)
+			if err != nil {
+				return err
+			}
+
+			switch b[0] {
+			case tab:
+				if _, _, err := e.Inp.ReadRune(); err != nil {
+					return err
+				}
+				pos = (pos + len(opts) + 1) % len(opts)
+			case esc:
+				if _, _, err := e.Inp.ReadRune(); err != nil {
+					return err
+				}
+				if err := e.refreshLine(); err != nil {
+					return err
+				}
+				return nil
+			default:
+				e.Buffer = []rune(c)
+				e.Cur = len(e.Buffer)
+				return nil
+			}
+		}
+	// */
 }
 
 func (e *Terminal) printHelp() error {
@@ -450,8 +502,9 @@ func (e *Terminal) printHelp() error {
 	)
 	tw.Init(e.Out, 0, 0, 3, ' ', 0)
 	for _, v := range dict {
-		fmt.Fprintf(tw, "\n\r%s\t%s\t", v.K, v.V)
+		fmt.Fprintf(tw, "\n\r  %s\t%s\t", v[0], v[1])
 	}
+	fmt.Fprintln(tw)
 	tw.Flush() // e.Out.Flush()
 
 	return e.refreshLine()
@@ -459,7 +512,9 @@ func (e *Terminal) printHelp() error {
 
 //
 
-func (e *Terminal) refreshLineString(s string) error {
+/*
+// replace Buffer by String and refreshLine()
+func (e *Terminal) refreshLineByString(s string) error {
 	b := e.Buffer
 	p := e.Cur
 	e.Buffer = []rune(s)
@@ -471,6 +526,7 @@ func (e *Terminal) refreshLineString(s string) error {
 	e.Cur = p
 	return nil
 }
+// */
 
 func (e *Terminal) refreshLine() error {
 	type pos struct {

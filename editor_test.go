@@ -755,8 +755,8 @@ func TestEditor_LineTabSomeCompletions(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if l != "foo bar" {
-		t.Errorf(`expected "foo bar" got %#v`, l)
+	if l != "foo" {
+		t.Errorf(`expected "foo" got %#v`, l)
 	}
 }
 
@@ -825,7 +825,7 @@ func TestEditor_Adjust(t *testing.T) {
 	}
 }
 
-func TestEditor_Write(t *testing.T) {
+func TestEditor_WriteOut(t *testing.T) {
 	in := bytes.NewBuffer(nil)
 	out := &checkedWriter{
 		expectations: []string{
@@ -841,7 +841,7 @@ func TestEditor_Write(t *testing.T) {
 		Buffer: []rune("foo bar"),
 	}
 
-	n, err := e.Write([]byte("baz\n"))
+	n, err := e.WriteOut([]byte("baz\n"))
 	if err != nil {
 		t.Error(err)
 	}
