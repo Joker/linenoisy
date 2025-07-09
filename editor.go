@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -31,9 +32,7 @@ const (
 	ctrlU     = 21
 	ctrlW     = 23
 	esc       = 27
-	space     = 32
 	backspace = 127
-	question  = '?'
 )
 
 var (
@@ -92,7 +91,7 @@ func (e *Terminal) LineEditor() (string, error) {
 			return string(e.Buffer), nil
 		case tab:
 			err = e.completeLine()
-		case question:
+		case '?':
 			err = e.printHelp()
 		case backspace, ctrlH:
 			err = e.editBackspace()
@@ -387,7 +386,7 @@ func (e *Terminal) editDeletePrevWord() error {
 	var w bool
 	var p int
 	for i := e.Cur - 1; i >= 0; i-- {
-		if e.Buffer[i] != space {
+		if e.Buffer[i] != ' ' {
 			w = true // found a word to delete
 			continue
 		}
@@ -435,25 +434,21 @@ func (e *Terminal) completeLine() error {
 		return e.refreshLine()
 	}
 	// fmt.Fprintf(e.Out, "\n\r    %s\n", strings.Join(opts, "   ")); e.Out.Flush()
+	// const size = 3
+	// var tabl [][]string
+	// for i := 0; i < opts_len; i += size {
+	// tabl = append(tabl, opts[i:min(i+size, opts_len)])
+	// }
 
-	const size = 3
-	var (
-		tabl [][]string
-		tw   = new(tabwriter.Writer)
-	)
-	for i := 0; i < opts_len; i += size {
-		tabl = append(tabl, opts[i:min(i+size, opts_len)])
-	}
-
+	tw := new(tabwriter.Writer)
 	tw.Init(e.Out, 0, 0, 4, ' ', 0)
-	for _, v := range tabl {
-		fmt.Fprintf(tw, "\n\r    %s\t", strings.Join(v, "\t"))
+	for chunk := range slices.Chunk(opts, 3) {
+		fmt.Fprintf(tw, "\n\r    %s\t", strings.Join(chunk, "\t"))
 	}
 	fmt.Fprintln(tw)
-	tw.Flush() // e.Out.Flush()
+	tw.Flush()
 
-	e.refreshLine()
-	return nil
+	return e.refreshLine()
 	/*
 		pos := 0
 		for {
