@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -69,33 +68,13 @@ func handleChannel(c ssh.NewChannel) {
 	}
 	defer conn.Close()
 
-	e := &linenoisy.Terminal{
-		Inp:    bufio.NewReader(conn),
-		Out:    bufio.NewWriter(conn),
-		Prompt: "> ",
-		Complete: func(_ string) []string {
-			return []string{
-				"Completion #1",
-				"Completion #2",
-				"Completion #3",
-			}
-		},
-		Hint: func(s string) *linenoisy.Hint {
-			if s == "foo " {
-				return &linenoisy.Hint{
-					Message: "bar baz",
-				}
-			}
-
-			if s == "foo bar " {
-				return &linenoisy.Hint{
-					Message: "baz",
-					Bold:    true,
-				}
-			}
-
-			return nil
-		},
+	e := linenoisy.NewTerminal(conn, "> ")
+	e.Complete = func(_ string) []string {
+		return []string{
+			"Completion #1",
+			"Completion #2",
+			"Completion #3",
+		}
 	}
 
 	go func() {
@@ -131,9 +110,14 @@ func handleChannel(c ssh.NewChannel) {
 		if err != nil {
 			break
 		}
-
 		log.Printf("line: %s\n", line)
-		fmt.Fprintf(e.Out, "\ryou have typed: %s\n", line)
+
+		e.Raw.Write([]byte("\r\n"))
+		if len(line) == 0 {
+			continue
+		}
+
+		fmt.Fprintf(e, "   you have typed: %s\n", line)
 
 		e.History.Add(line)
 

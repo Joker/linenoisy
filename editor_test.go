@@ -729,10 +729,10 @@ func TestEditor_LineTabSomeCompletions(t *testing.T) {
 			"\r> f\x1b[0K\r\x1b[3C",
 			"\r> fo\x1b[0K\r\x1b[4C",
 			"\r> foo\x1b[0K\r\x1b[5C",
-			"\r> foo bar\x1b[0K\r\x1b[9C",
-			"\r> foo bar baz\x1b[0K\r\x1b[13C",
-			"\r> foo\x1b[0K\r\x1b[5C",
-			"\r> foo bar\x1b[0K\r\x1b[9C",
+			"\n\r    foo bar    foo bar baz    \n\r> foo\x1b[0K\r\x1b[5C",
+			"\n\r    foo bar    foo bar baz    \n\r> foo\x1b[0K\r\x1b[5C",
+			"\n\r    foo bar    foo bar baz    \n\r> foo\x1b[0K\r\x1b[5C",
+			"\n\r    foo bar    foo bar baz    \n\r> foo\x1b[0K\r\x1b[5C",
 		},
 	}
 
@@ -768,7 +768,7 @@ func TestEditor_LineHint(t *testing.T) {
 			"\r> f\x1b[0K\r\x1b[3C",
 			"\r> fo\x1b[0K\r\x1b[4C",
 			"\r> foo\x1b[0K\r\x1b[5C",
-			"\r> foo \x1b[0;37;49mbar\x1b[0m\x1b[0K\r\x1b[6C",
+			"\r> foo bar\x1b[0K\r\x1b[6C",
 			"\r> foo b\x1b[0K\r\x1b[7C",
 			"\r> foo ba\x1b[0K\r\x1b[8C",
 			"\r> foo bar\x1b[0K\r\x1b[9C",
@@ -779,14 +779,11 @@ func TestEditor_LineHint(t *testing.T) {
 		Inp:    bufio.NewReader(in),
 		Out:    bufio.NewWriter(out),
 		Prompt: "> ",
-		Hint: func(s string) *Hint {
+		Hint: func(s string) string {
 			if s == "foo " {
-				return &Hint{
-					Message: "bar",
-				}
+				return "bar"
 			}
-
-			return nil
+			return ""
 		},
 	}
 

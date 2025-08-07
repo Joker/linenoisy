@@ -4,7 +4,7 @@ Linenoisy is a simple pure-Go line editor.
 It speaks to `io.Reader` and `io.Writer` instead of pty/tty,
 which makes it easy to integrate with network based applications (see [examples/ssh](https://github.com/Joker/linenoisy/blob/master/examples/ssh/main.go)).
 
-It is inspired by [Linenoise](https://github.com/antirez/linenoise).
+It is inspired by [Linenoise](https://github.com/antirez/linenoise).  
 Based on [Linesqueak](https://github.com/ichiban/linesqueak).
 
 # Features
@@ -17,21 +17,24 @@ Based on [Linesqueak](https://github.com/ichiban/linesqueak).
 # Basic Usage
 
 ```go
-e := &linenoisy.Editor{
-	In:     bufio.NewReader(r), // `r` is `io.Reader` (e.g. `ssh.Channel`)
-	Out:    bufio.NewWriter(w), // `w` is `io.Writer` (e.g. `ssh.Channel`)
-	Prompt: "> ",               // you can be creative here :)
-}
+e := linenoisy.NewTerminal(channel, "> ") // io.ReadWriteCloser (e.g. `ssh.Channel`)
 
 // you may want to process multiple lines
-// if so, call `Line()` in a loop
+// if so, call `LineEditor()` in a loop
 for {
-	line, err := e.Line() // `Line()` does all the editor things and returns input line
+	line, err := e.LineEditor() // `LineEditor()` does all the editor things and returns input line
 	if err != nil {
 		panic(err) // TODO: proper error handling
 	}
 	
-	fmt.Fprintf(e.Out, "\ryou have typed: %s\n", line)
+	log.Printf("line: %s\n", line)
+
+	e.Raw.Write([]byte("\r\n"))
+	if len(line) == 0 {
+		continue
+	}
+
+	fmt.Fprintf(e, "", line)
 }
 ```
 

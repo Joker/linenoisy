@@ -36,6 +36,16 @@ const (
 )
 
 var (
+	Black   = []byte{esc, '[', '3', '0', 'm'}
+	Red     = []byte{esc, '[', '3', '1', 'm'}
+	Green   = []byte{esc, '[', '3', '2', 'm'}
+	Yellow  = []byte{esc, '[', '3', '3', 'm'}
+	Blue    = []byte{esc, '[', '3', '4', 'm'}
+	Magenta = []byte{esc, '[', '3', '5', 'm'}
+	Cyan    = []byte{esc, '[', '3', '6', 'm'}
+	White   = []byte{esc, '[', '3', '7', 'm'}
+	Reset   = []byte{esc, '[', '0', 'm'}
+
 	SupportedTerms = []string{"dumb", "cons25", "emacs"} // SupportedTerms is a list of supported terminals.
 	curPosPattern  = regexp.MustCompile("\x1b\\[(\\d+);(\\d+)R")
 )
@@ -59,7 +69,7 @@ type Terminal struct {
 
 	Complete  func(line string) []string    // OPTIONAL; It takes the current user input and returns some completion suggestions.
 	Help      func(line string) [][2]string // OPTIONAL; Print help.
-	Hint      func(line string) *Hint       // OPTIONAL; Hint will be called while user is typing and displayed on the right of the user input.
+	Hint      func(line string) string      // OPTIONAL; Hint will be called while user is typing and displayed on the right of the user input.
 	WidthChar func(rune) int                // OPTIONAL; Calculates character width on the terminal. (A lot of CJK characters and emojis are twice as wide as ASCII characters.)
 }
 
@@ -76,7 +86,7 @@ func NewTerminal(channel io.ReadWriteCloser, prompt string) *Terminal {
 
 // LineEditor reads user key strokes and returns a confirmed input line while displaying editor states on the terminal.
 func (e *Terminal) LineEditor() (string, error) {
-	if err := e.editReset(); err != nil {
+	if err := e.LineReset(); err != nil {
 		return string(e.Buffer), err
 	}
 
@@ -169,7 +179,7 @@ func (e *Terminal) LineEditor() (string, error) {
 		case ctrlN:
 			err = e.editHistoryNext()
 		case ctrlU:
-			err = e.editReset()
+			err = e.LineReset()
 		case ctrlK:
 			err = e.editKillForward()
 		case ctrlA:
@@ -264,9 +274,7 @@ func (e *Terminal) Write(buf []byte) (written int, err error) {
 	return written, nil
 }
 
-//
-
-func (e *Terminal) editReset() error {
+func (e *Terminal) LineReset() error {
 	e.notZero()
 	e.Buffer = []rune{}
 	e.OldCur = 0
@@ -274,6 +282,8 @@ func (e *Terminal) editReset() error {
 	e.MaxRows = 0
 	return e.refreshLine()
 }
+
+//
 
 func (e *Terminal) notZero() {
 	if e.Rows == 0 {
@@ -505,6 +515,13 @@ func (e *Terminal) printHelp() error {
 	return e.refreshLine()
 }
 
+func (e *Terminal) hint() string {
+	if e.Hint == nil {
+		return ""
+	}
+	return e.Hint(string(e.Buffer))
+}
+
 //
 
 /*
@@ -668,51 +685,6 @@ func (e *Terminal) beep() error {
 	}
 	return nil
 }
-
-//
-
-// Hint displays helpful message with styles on the right of user input.
-type Hint struct {
-	Message string // message to be displayed.
-	Color   Color  // text color of the hint.
-	Bold    bool   // increases intensity if true.
-}
-
-func (e *Terminal) hint() string {
-	if e.Hint == nil {
-		return ""
-	}
-
-	h := e.Hint(string(e.Buffer))
-	if h == nil {
-		return ""
-	}
-
-	if h.Color == 0 {
-		h.Color = White
-	}
-
-	var b int
-	if h.Bold {
-		b = 1
-	}
-
-	return fmt.Sprintf("\x1b[%d;%d;49m%s\x1b[0m", b, h.Color, h.Message)
-}
-
-// Color represents text color.
-type Color byte
-
-const (
-	Black Color = 30 + iota
-	Red
-	Green
-	Yellow
-	Blue
-	Magenta
-	Cyan
-	White
-)
 
 //
 
